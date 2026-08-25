@@ -1,10 +1,19 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from models.trip import Trip
 from database import SessionLocal, init_db
 from services.bedrock_service import get_ai_recommendation
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 init_db()
 
@@ -79,6 +88,12 @@ def get_trip(trip_id: int):
 def create_trip(request: TripRequest):
     daily_budget = calculate_daily_budget(request.budget, request.days)
     category = get_trip_category(request.budget)
+    ai_recommendation = get_ai_recommendation(
+        destination = request.destination,
+        days = request.days,
+        budget = request.budget,
+        travel_style = request.travel_style,
+    )
 
     # Trip ORM object
     trip = Trip(
@@ -88,6 +103,7 @@ def create_trip(request: TripRequest):
         travel_style = request.travel_style,
         category = category,
         daily_budget = daily_budget,
+        ai_recommendation = ai_recommendation
     )
 
     # save to PostgreSQL
