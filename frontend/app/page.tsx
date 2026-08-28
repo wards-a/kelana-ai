@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
+import { formatBudget } from "@/lib/formatters";
 
 interface TripResponse {
   id: number;
@@ -21,7 +22,7 @@ export default function Home() {
     destination: "",
     budget: "",
     days: "",
-    travel_style: "adventure",
+    travel_style: "Solo",
   });
 
   const [loading, setLoading] = useState(false);
@@ -132,11 +133,11 @@ export default function Home() {
                 </div>
                 <div>
                   <p className="text-blue-100 text-sm">Total Budget</p>
-                  <p className="text-2xl font-bold">${tripData.budget.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">{formatBudget(tripData.budget)}</p>
                 </div>
                 <div>
                   <p className="text-blue-100 text-sm">Daily Budget</p>
-                  <p className="text-2xl font-bold">${tripData.daily_budget.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">{formatBudget(tripData.daily_budget)}</p>
                 </div>
                 <div>
                   <p className="text-blue-100 text-sm">Category</p>
@@ -301,16 +302,16 @@ export default function Home() {
                       onChange={handleInputChange}
                       className="w-full px-4 py-2 text-gray-700 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     >
-                      <option value="adventure">Adventure</option>
+                      {/* <option value="adventure">Adventure</option>
                       <option value="luxury">Luxury</option>
                       <option value="budget">Budget</option>
                       <option value="cultural">Cultural</option>
-                      <option value="relaxation">Relaxation</option>
+                      <option value="relaxation">Relaxation</option> */}
                       <option value="solo">Solo</option>
                       <option value="couple">Couple</option>
                       <option value="family">Family</option>
-                      <option value="business">Business</option>
-                      <option value="honeymoon">Honeymoon</option>
+                      {/* <option value="business">Business</option>
+                      <option value="honeymoon">Honeymoon</option> */}
                     </select>
                   </div>
 
@@ -379,7 +380,7 @@ export default function Home() {
               <h3 className="text-white font-semibold mb-4">Quick Links</h3>
               <ul className="space-y-2 text-sm">
                 <li>
-                  <a href="#" className="hover:text-white transition">
+                  <a href="/trips" className="hover:text-white transition">
                     Destinations
                   </a>
                 </li>
