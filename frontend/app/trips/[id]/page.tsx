@@ -2,16 +2,20 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import { Trip, getTripById } from "@/app/services/tripService";
 import { getCategoryBadgeStyle } from "@/lib/categoryStyles";
 import { getCountryFlag } from "@/lib/countryFlags";
 import { formatBudget } from "@/lib/formatters";
+import { useAuth } from "@/app/context/AuthContext";
+import { ProtectedRoute } from "@/app/components/ProtectedRoute";
 
 
 export default function TripDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const tripId = params.id as string;
 
   const [trip, setTrip] = useState<Trip | null>(null);
@@ -47,8 +51,14 @@ export default function TripDetailPage() {
       })
     : "";
 
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white">
+    <ProtectedRoute>
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
@@ -57,8 +67,29 @@ export default function TripDetailPage() {
               ← Back to Trips
             </span>
           </Link>
-          <div className="text-right">
+          <div className="text-center">
             <h1 className="text-2xl font-bold text-blue-600">KelanaAI</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            {user && (
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Welcome,</p>
+                <p className="font-semibold text-gray-800">{user.name}</p>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Link href="/profile">
+                <button className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition duration-200">
+                  👤 Profile
+                </button>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-200"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -201,6 +232,7 @@ export default function TripDetailPage() {
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

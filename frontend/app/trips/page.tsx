@@ -2,14 +2,19 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import TripCard from "@/components/tripCard";
 import { Trip, getAllTrips } from "@/app/services/tripService";
+import { useAuth } from "@/app/context/AuthContext";
+import { ProtectedRoute } from "@/app/components/ProtectedRoute";
 
 const ITEMS_PER_PAGE = 10;
 
 type SortOption = "recent" | "oldest" | "budget-low" | "budget-high";
 
 export default function TripsPage() {
+  const router = useRouter();
+  const { user, logout } = useAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [filteredTrips, setFilteredTrips] = useState<Trip[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -101,6 +106,11 @@ export default function TripsPage() {
     setCurrentPage(page);
   };
 
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
+
   // Generate page numbers for pagination buttons
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
@@ -135,7 +145,8 @@ export default function TripsPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white">
+    <ProtectedRoute>
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
       <header className="bg-white shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
@@ -143,11 +154,32 @@ export default function TripsPage() {
             <h1 className="text-3xl font-bold text-blue-600">KelanaAI</h1>
             <p className="text-gray-600 text-sm">Your AI-Powered Travel Planner</p>
           </div>
-          <Link href="/">
-            <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-200">
-              Plan New Trip
-            </button>
-          </Link>
+          <div className="flex items-center gap-4">
+            {user && (
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Welcome,</p>
+                <p className="font-semibold text-gray-800">{user.name}</p>
+              </div>
+            )}
+            <div className="flex gap-2">
+              <Link href="/profile">
+                <button className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition duration-200">
+                  👤 Profile
+                </button>
+              </Link>
+              <Link href="/">
+                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-200">
+                  Plan New Trip
+                </button>
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-200"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -236,6 +268,14 @@ export default function TripsPage() {
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
             <p className="font-semibold">Error loading trips</p>
             <p className="text-sm">{error}</p>
+            {error.includes("not authenticated") && (
+              <button 
+                onClick={() => router.push("/login")}
+                className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-200"
+              >
+                Go to Login
+              </button>
+            )}
           </div>
         )}
 
@@ -497,6 +537,7 @@ export default function TripsPage() {
           </div>
         </div>
       </footer>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

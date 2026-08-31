@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi import HTTPException, status, Depends
+from pydantic import BaseModel, EmailStr
+from models.user import User
 from models.trip import Trip
 from database import SessionLocal, init_db
 from services.bedrock_service import get_ai_recommendation
+from services.auth_service import register_user, RegistrationError, login_user, LoginError, get_current_user
 
 app = FastAPI()
 
@@ -22,6 +25,15 @@ class TripRequest(BaseModel):
     days:           int
     budget:         float
     travel_style:   str
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 # a GET endpoint at the root path
 @app.get("/")
@@ -45,6 +57,128 @@ def get_health_check():
         "status" : "OK"
     }
 
+# POST endpoint - user registration
+@app.post("/api/v1/auth/register")
+def register(request: RegisterRequest):
+    """
+    Register a new user
+    
+    Args:
+        request: Registration request containing name, email, and password
+        
+    Returns:
+        User object with id, name, email, and created_at
+        
+    Raises:
+        HTTPException: If registration fails (e.g., email already exists)
+    """
+    try:
+        user = register_user(
+            name=request.name,
+            email=request.email,
+            password=request.password
+        )
+        return {
+            "success": True,
+            "message": "User registered successfully",
+            "user": user
+        }
+    except RegistrationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during registration"
+        )
+
+# POST endpoint - user login
+@app.post("/api/v1/auth/login")
+def login(request: LoginRequest):
+    """
+    Authenticate user and return JWT token
+    
+    Args:
+        request: Login request containing email and password
+        
+    Returns:
+        JWT access token and user information
+        
+    Raises:
+        HTTPException: If credentials are invalid
+    """
+    try:
+        result = login_user(
+            email=request.email,
+            password=request.password
+        )
+        return {
+            "success": True,
+            "message": "Login successful",
+            "data": result
+        }
+    except LoginError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An unexpected error occurred during login"
+        )
+
+# GET endpoint - get current user profile with trip count
+@app.get("/api/v1/auth/me")
+def get_current_user_profile(current_user: dict = Depends(get_current_user)):
+    """
+    Get current authenticated user's profile information
+    
+    Args:
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        User profile with name, email, id, and total trips count
+        
+    Raises:
+        HTTPException: If user is not authenticated
+    """
+    db = SessionLocal()
+    try:
+        user_id = int(current_user["sub"])
+        
+        # Get user from database
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Count trips for this user
+        trip_count = db.query(Trip).filter(Trip.user_id == user_id).count()
+        
+        return {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "created_at": user.created_at,
+            "total_trips": trip_count
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve user profile: {str(e)}"
+        )
+    finally:
+        db.close()
+
 # GET endpoint - returns all valid trip categories
 @app.get("/api/v1/trip-categories")
 def get_trip_categories():
@@ -63,29 +197,36 @@ def get_recommended_transportations():
     recommended_transportations = ["Bus", "Train", "Flight"]
     return recommended_transportations
 
-# GET all trips
+# GET all trips for current user
 @app.get("/api/v1/trips")
-def list_trips():
+def list_trips(current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
-    trips = db.query(Trip).all()
+    user_id = int(current_user["sub"])
+    trips = db.query(Trip).filter(Trip.user_id == user_id).all()
     db.close()
     return trips
 
-# GET ones spesific trips by trip_id
+# GET one specific trip by trip_id (with ownership verification)
 @app.get("/api/v1/trips/{trip_id}")
-def get_trip(trip_id: int):
+def get_trip(trip_id: int, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
+    user_id = int(current_user["sub"])
     trip = db.query(Trip).filter(Trip.id == trip_id).first()
     db.close()
+    
     # handling not found
     if trip is None:
         raise HTTPException(status_code=404, detail=f"Trip with id {trip_id} not found")
+    
+    # Verify user owns this trip
+    if trip.user_id != user_id:
+        raise HTTPException(status_code=403, detail="You do not have permission to view this trip")
     
     return trip
 
 # POST endpoint - receives JSON, returns JSON
 @app.post("/api/v1/trips")
-def create_trip(request: TripRequest):
+def create_trip(request: TripRequest, current_user: dict = Depends(get_current_user)):
     daily_budget = calculate_daily_budget(request.budget, request.days)
     category = get_trip_category(request.budget)
     ai_recommendation = get_ai_recommendation(
@@ -97,6 +238,7 @@ def create_trip(request: TripRequest):
 
     # Trip ORM object
     trip = Trip(
+        user_id = int(current_user["sub"]),
         destination = request.destination,
         days = request.days,
         budget = request.budget,
@@ -117,13 +259,18 @@ def create_trip(request: TripRequest):
 
 # POST Endpoint - generate AI Recommendation
 @app.post("/api/v1/trips/{id}/generate")
-def create_ai_recommendation(id: int):
+def create_ai_recommendation(id: int, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
+    user_id = int(current_user["sub"])
     try: 
         trip = db.query(Trip).filter(Trip.id == id).first()
 
         if not trip:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip dengan ID {id} tidak ditemukan")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip with id {id} not found")
+        
+        # Verify user owns this trip
+        if trip.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to generate recommendations for this trip")
 
         ai_recommendation = get_ai_recommendation(
             destination = trip.destination,
@@ -145,13 +292,18 @@ def create_ai_recommendation(id: int):
 
 # Update trip by id, recalculate daily budget and category
 @app.put("/api/v1/trips/{id}")
-def update_trip(id: int, request: TripRequest):
+def update_trip(id: int, request: TripRequest, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
+    user_id = int(current_user["sub"])
     try: 
         trip = db.query(Trip).filter(Trip.id == id).first()
 
         if not trip:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip dengan ID {id} tidak ditemukan")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip with id {id} not found")
+        
+        # Verify user owns this trip
+        if trip.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to update this trip")
 
         daily_budget = calculate_daily_budget(request.budget, request.days)
         category = get_trip_category(request.budget)
@@ -170,20 +322,25 @@ def update_trip(id: int, request: TripRequest):
     finally:
         db.close()
 
-# DELETE trip by id
+# DELETE trip by id (with ownership verification)
 @app.delete("/api/v1/trips/{id}")
-def delete_trip(id: int):
+def delete_trip(id: int, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
+    user_id = int(current_user["sub"])
     try:
         trip = db.query(Trip).filter(Trip.id == id).first()
 
         if not trip:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip dengan ID {id} tidak ditemukan")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Trip with id {id} not found")
+        
+        # Verify user owns this trip
+        if trip.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to delete this trip")
 
         db.delete(trip)
         db.commit()
 
-        return "Deleted"
+        return {"message": "Trip deleted successfully"}
 
     finally:
         db.close()
