@@ -139,6 +139,11 @@ export default function Home() {
                   👤 Profile
                 </button>
               </Link>
+              <Link href="/ask">
+                <button className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition duration-200">
+                  💬 Ask AI
+                </button>
+              </Link>
               <Link href="/trips">
                 <button className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg transition duration-200">
                   My Trips

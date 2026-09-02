@@ -7,6 +7,7 @@ from models.trip import Trip
 from database import SessionLocal, init_db
 from services.bedrock_service import get_ai_recommendation
 from services.auth_service import register_user, RegistrationError, login_user, LoginError, get_current_user
+from services.kb_service import retrieve_and_generate
 
 app = FastAPI()
 
@@ -34,6 +35,9 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class AskRequest(BaseModel):
+    question: str
 
 # a GET endpoint at the root path
 @app.get("/")
@@ -344,6 +348,33 @@ def delete_trip(id: int, current_user: dict = Depends(get_current_user)):
 
     finally:
         db.close()
+
+# POST Knowledge Base
+@app.post("/api/v1/ask")
+def ask(request: AskRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Ask a question about travel plans or destinations
+    Uses knowledge base to retrieve and generate answers
+    
+    Args:
+        request: Ask request containing the question
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        Question, answer, and sources
+        
+    Raises:
+        HTTPException: If request fails or user is not authenticated
+    """
+    try:
+        result = retrieve_and_generate(request.question)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "question": request.question,
+        "answer": result["answer"],
+        "source": result["source"],
+    }
     # return {
     #     "destination" : request.destination,
     #     "budget" : request.budget,
