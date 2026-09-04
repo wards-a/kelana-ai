@@ -4,10 +4,12 @@ from fastapi import HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr
 from models.user import User
 from models.trip import Trip
+# from models.conversation import Conversation, Message
 from database import SessionLocal, init_db
 from services.bedrock_service import get_ai_recommendation
 from services.auth_service import register_user, RegistrationError, login_user, LoginError, get_current_user
 from services.kb_service import retrieve_and_generate
+from services.conversation_service import create_conversation, get_conversation, get_user_conversations, delete_conversation, add_message_to_conversation, update_conversation_title, ConversationError
 
 app = FastAPI()
 
@@ -38,6 +40,17 @@ class LoginRequest(BaseModel):
 
 class AskRequest(BaseModel):
     question: str
+
+class MessageRequest(BaseModel):
+    role: str
+    content: str
+
+class ConversationRequest(BaseModel):
+    title: str
+    messages: list[MessageRequest]
+
+class UpdateConversationRequest(BaseModel):
+    title: str
 
 # a GET endpoint at the root path
 @app.get("/")
@@ -375,6 +388,179 @@ def ask(request: AskRequest, current_user: dict = Depends(get_current_user)):
         "answer": result["answer"],
         "source": result["source"],
     }
+
+# POST endpoint - save conversation
+@app.post("/api/v1/conversations")
+def save_conversation(request: ConversationRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Save a conversation with messages
+    
+    Args:
+        request: Conversation request containing title and messages
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        Conversation with all messages
+        
+    Raises:
+        HTTPException: If conversation creation fails or user is not authenticated
+    """
+    try:
+        user_id = int(current_user["sub"])
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        result = create_conversation(user_id, request.title, messages)
+        return {
+            "success": True,
+            "message": "Conversation saved successfully",
+            "data": result
+        }
+    except ConversationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save conversation: {str(e)}")
+
+# GET endpoint - get all conversations for current user
+@app.get("/api/v1/conversations")
+def list_conversations(current_user: dict = Depends(get_current_user)):
+    """
+    Get all conversations for the current user
+    
+    Args:
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        List of conversations
+        
+    Raises:
+        HTTPException: If retrieval fails or user is not authenticated
+    """
+    try:
+        user_id = int(current_user["sub"])
+        conversations = get_user_conversations(user_id)
+        return {
+            "success": True,
+            "data": conversations
+        }
+    except ConversationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve conversations: {str(e)}")
+
+# GET endpoint - get a specific conversation
+@app.get("/api/v1/conversations/{conversation_id}")
+def get_conv(conversation_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Get a specific conversation with all messages (with ownership verification)
+    
+    Args:
+        conversation_id: Conversation ID to retrieve
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        Conversation with all messages
+        
+    Raises:
+        HTTPException: If conversation not found or user doesn't own it
+    """
+    try:
+        user_id = int(current_user["sub"])
+        conversation = get_conversation(user_id, conversation_id)
+        return {
+            "success": True,
+            "data": conversation
+        }
+    except ConversationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve conversation: {str(e)}")
+
+# PATCH endpoint - update conversation title
+@app.patch("/api/v1/conversations/{conversation_id}")
+def update_conversation(conversation_id: int, request: UpdateConversationRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Update a conversation's title (with ownership verification)
+    
+    Args:
+        conversation_id: Conversation ID to update
+        request: Update request containing new title
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        Updated conversation data
+        
+    Raises:
+        HTTPException: If conversation not found or user doesn't own it
+    """
+    try:
+        user_id = int(current_user["sub"])
+        conversation = update_conversation_title(user_id, conversation_id, request.title)
+        return {
+            "success": True,
+            "message": "Conversation title updated successfully",
+            "data": conversation
+        }
+    except ConversationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update conversation: {str(e)}")
+
+# DELETE endpoint - delete a conversation
+@app.delete("/api/v1/conversations/{conversation_id}")
+def delete_conv(conversation_id: int, current_user: dict = Depends(get_current_user)):
+    """
+    Delete a conversation (with ownership verification)
+    
+    Args:
+        conversation_id: Conversation ID to delete
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        Success message
+        
+    Raises:
+        HTTPException: If conversation not found or user doesn't own it
+    """
+    try:
+        user_id = int(current_user["sub"])
+        result = delete_conversation(user_id, conversation_id)
+        return {
+            "success": True,
+            "message": result["message"]
+        }
+    except ConversationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete conversation: {str(e)}")
+
+# POST endpoint - add message to conversation
+@app.post("/api/v1/conversations/{conversation_id}/messages")
+def add_message(conversation_id: int, request: MessageRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Add a message to an existing conversation
+    
+    Args:
+        conversation_id: Conversation ID to add message to
+        request: Message request containing role and content
+        current_user: Current user from JWT token (dependency injection)
+        
+    Returns:
+        Created message
+        
+    Raises:
+        HTTPException: If conversation not found or user doesn't own it
+    """
+    try:
+        user_id = int(current_user["sub"])
+        message = add_message_to_conversation(conversation_id, user_id, request.role, request.content)
+        return {
+            "success": True,
+            "message": "Message added successfully",
+            "data": message
+        }
+    except ConversationError as e:
+        raise HTTPException(status_code=404 if "not found" in str(e).lower() else 403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add message: {str(e)}")
     # return {
     #     "destination" : request.destination,
     #     "budget" : request.budget,
