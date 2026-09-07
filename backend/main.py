@@ -15,7 +15,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://kelana-ai-rho.vercel.app/"],
+    allow_origins=["https://kelana-d8rdqly9f-mawardis-projects-89b6dbd4.vercel.app/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
