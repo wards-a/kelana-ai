@@ -1,0 +1,40 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.venv
+venv/
+ENV/
+env/
+
+# Frontend
+frontend/
+node_modules/
+.next/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Docs
+README.md
+DEPLOYMENT.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

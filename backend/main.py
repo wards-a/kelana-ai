@@ -10,12 +10,20 @@ from services.bedrock_service import get_ai_recommendation
 from services.auth_service import register_user, RegistrationError, login_user, LoginError, get_current_user
 from services.kb_service import retrieve_and_generate
 from services.conversation_service import create_conversation, get_conversation, get_user_conversations, delete_conversation, add_message_to_conversation, update_conversation_title, ConversationError
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 app = FastAPI()
 
+# CORS configuration from environment variable
+allowed_origins = os.getenv("FRONTEND_URL", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
