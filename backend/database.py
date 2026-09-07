@@ -3,21 +3,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
-# Load .env file - check both root and backend directories
-env_path = os.path.join(os.path.dirname(__file__), '.env')
-if not os.path.exists(env_path):
-    # Try parent directory (for deployment scenarios)
-    env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-
-load_dotenv(env_path)
-
-# Connection string from environment variable - never hardcode secrets
+# load .env so os.getenv() can read it
+load_dotenv()
+# connection string from .env - never hardcode secrets
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL environment variable is not set")
-
-# engine = the connection pool
+# engine = teh connection pool
 engine = create_engine(DATABASE_URL)
 # SessionLocal = a factory for DB sessions
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
