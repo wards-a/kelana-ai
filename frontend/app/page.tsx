@@ -65,7 +65,8 @@ export default function Home() {
       }
 
       const token = localStorage.getItem("token");
-      const response = await fetch("http://localhost:8000/api/v1/trips", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await fetch(`${apiUrl}/api/v1/trips`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
