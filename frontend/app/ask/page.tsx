@@ -7,6 +7,8 @@ import { askQuestion, AskResponse } from "@/app/services/askService";
 import { saveConversation, getConversations, updateConversationTitle, getConversation } from "@/app/services/conversationService";
 import { useAuth } from "@/app/context/AuthContext";
 import { ProtectedRoute } from "@/app/components/ProtectedRoute";
+import ReactMarkdown from "react-markdown";
+
 
 interface Message {
   id: string;
@@ -422,7 +424,9 @@ export default function AskPage() {
                         }`}
                       >
                         <p className="whitespace-pre-wrap break-words">
+                        <ReactMarkdown>
                           {message.content}
+                        </ReactMarkdown>
                         </p>
                         {message.response?.source && message.response.source.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-gray-300 text-xs opacity-75">
@@ -529,7 +533,7 @@ export default function AskPage() {
                   onChange={(e) => setInputValue(e.target.value)}
                   placeholder="Ask about travel destinations, trip planning, budgets..."
                   disabled={loading}
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-3 text-gray-700 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100 disabled:cursor-not-allowed"
                 />
                 <button
                   type="submit"
